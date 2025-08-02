@@ -386,7 +386,7 @@ detect_and_link_netcdf
 write_modulefile
 
 # ---------- Run Tests ----------
-"${ROOT_DIR}/tests/run_env_tests.sh"
+bash "${ROOT_DIR}/tests/run_env_tests.sh"
 
 cat <<EOF
 

@@ -58,6 +58,7 @@ if type module >/dev/null 2>&1; then
   module try-load gnu12/12.2.0  || module load gnu12  || true
   module try-load openmpi4/4.1.5 || module load openmpi4 || true
   module try-load phdf5/1.14.0   || module try-load hdf5 || true
+  echo "Loading local modules from: ${ROOT_DIR}/env/modules/WRF/lib_1.0.lua"
   module use "${ROOT_DIR}/env/modules"
   module load WRF/lib_1.0
 else
@@ -71,14 +72,14 @@ export PATH="${NETCDF}/bin:${PATH}"
 export LD_LIBRARY_PATH="${NETCDF}/lib:${ROOT_DIR}/library/grib2/lib:${LD_LIBRARY_PATH:-}"
 
 # Ensure versionless .so symlinks exist in netcdf-links/lib
-if [[ -d "${NETCDF}/lib" ]]; then
-  for base in netcdf netcdff; do
-    vers="$(ls -1 "${NETCDF}/lib/lib${base}.so."* 2>/dev/null | head -1 || true)"
-    if [[ -n "${vers}" ]]; then
-      ln -sfn "$(basename "$vers")" "${NETCDF}/lib/lib${base}.so"
-    fi
-  done
-fi
+#if [[ -d "${NETCDF}/lib" ]]; then
+#  for base in netcdf netcdff; do
+#    vers="$(ls -1 "${NETCDF}/lib/lib${base}.so."* 2>/dev/null | head -1 || true)"
+#    if [[ -n "${vers}" ]]; then
+#      ln -sfn "$(basename "$vers")" "${NETCDF}/lib/lib${base}.so"
+#    fi
+#  done
+#fi
 
 # ---------- Sanity of key tools ----------
 need mpicc; need mpif90 || need mpifort
