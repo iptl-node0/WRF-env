@@ -1,0 +1,8 @@
+/WPS
+/WRF
+/tests/*/a*
+/tests/*/netcdf.inc
+/tests/*/kelly*
+/library
+*/old/*
+

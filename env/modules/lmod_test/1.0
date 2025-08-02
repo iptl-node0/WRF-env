@@ -1,0 +1,15 @@
+#%Module1.0#####################################################################
+##
+## lmod_test/1.0  – quick sanity check that the LOCAL_MODULES autoload works
+##
+
+proc ModulesHelp { } {
+    puts stderr "Loads lmod_test 1.0 – sets \$LMOD_TEST=ok"
+}
+module-whatis "Test module: sets LMOD_TEST=ok"
+
+# show a banner so you know it loaded
+puts stderr ">> lmod_test/1.0 loaded – environment verified"
+
+# expose one harmless variable
+setenv LMOD_TEST ok

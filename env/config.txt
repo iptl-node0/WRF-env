@@ -1,0 +1,30 @@
+# env-management-template config_template.txt
+# Copy this file to env/config.txt and customise as needed.
+# Only redefine variables you want to change.
+
+# ── System packages ───────────────────────────────────────────────
+# direnv, python3, python3-venv and lmod are always required
+DNF_PACKAGES=(lmod-ohpc python3 python3-pip python3-virtualenv R R-devel) # direnv installed from source
+YUM_PACKAGES=("${DNF_PACKAGES[@]}")                   # RHEL <8 same names
+APT_PACKAGES=(direnv python3 python3-venv lmod r-base r-base-dev)
+PACMAN_PACKAGES=(untested)                                   # untested means not supported by repository developer - use at your own risk
+
+# ── Python packages (pip) ─────────────────────────────────────────
+PYTHON_PACKAGES=(numpy)
+
+# ── Optional: R packages to pre-seed into renv cache ─────────────
+R_PACKAGES=()
+
+# ── Interpreter version pins (optional) ──────────────────────────
+# Leave blank to use the system default versions.
+# PYTHON_VERSION=3.11
+# R_VERSION=4.3.2
+
+# ── OpenHPC modules to load automatically in the env ──────────────
+# Default makes all local modules available and loaded as well as
+# any OpenHPC modules specified below. Do not list local modules. 
+OPENHPC_MODULES=() # loaded by modulefiles for WRF-ohpc
+
+# Extensions and folders to add to local .gitignore
+# Combined with defaults from setup_env.sh
+GITIGNORE_ADD=()
