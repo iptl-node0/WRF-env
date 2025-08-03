@@ -89,30 +89,85 @@ fi
 # 1b. Ensure direnv is installed *outside* Spack (static binary) ───────
 ########################################################################
 echo -e "\n── direnv installer ─────────────────────────────────────────"
+set -Eeuo pipefail
 
-if command -v direnv &>/dev/null; then
-  echo "✅ direnv already installed: $(direnv --version)"
-else
-  echo "🔧 Installing direnv via official install.sh …"
-  # Run the script with sudo so it can copy the binary to /usr/local/bin.
-  # The script is idempotent: re-running just replaces the existing binary.
-  curl -sfL https://direnv.net/install.sh | sudo bash
-  if command -v direnv &>/dev/null; then
-    echo "✅ direnv installed: $(direnv --version)"
+choose_bin_path() {
+  # Prefer /usr/local/bin (system-wide) if we can write with sudo; else ~/.local/bin
+  if sudo -n test -w /usr/local/bin 2>/dev/null || sudo -v >/dev/null 2>&1; then
+    echo /usr/local/bin
   else
-    echo "❌ direnv installation failed (check permissions)." >&2
-    exit 1
+    mkdir -p "$HOME/.local/bin"
+    echo "$HOME/.local/bin"
   fi
+}
+
+is_broken_direnv() {
+  local d
+  d="$(command -v direnv 2>/dev/null || true)"
+  # Broken if missing, not executable, not an ELF, or "direnv version" fails
+  if [ -z "$d" ] || [ ! -x "$d" ]; then return 0; fi
+  if ! file -b "$d" | grep -q 'ELF .* executable'; then return 0; fi
+  if ! "$d" version >/dev/null 2>&1; then return 0; fi
+  return 1
+}
+
+ensure_local_bin_on_path() {
+  local LINE='export PATH="$HOME/.local/bin:$PATH"'
+  if [ -d "$HOME/.local/bin" ]; then
+    add_line_if_missing "$LINE" "$HOME/.bashrc"
+    add_line_if_missing "$LINE" "$HOME/.bash_profile"
+    # Make it effective in the current shell too
+    case ":$PATH:" in
+      *":$HOME/.local/bin:"*) : ;;
+      *) export PATH="$HOME/.local/bin:$PATH" ;;
+    esac
+  fi
+}
+
+install_or_fix_direnv() {
+  local BIN_PATH
+  BIN_PATH="$(choose_bin_path)"
+  echo "→ Installing direnv to: $BIN_PATH"
+
+  if [ "$BIN_PATH" = "$HOME/.local/bin" ]; then
+    ensure_local_bin_on_path
+    curl -sfL https://direnv.net/install.sh | env bin_path="$BIN_PATH" bash
+  else
+    curl -sfL https://direnv.net/install.sh | sudo env bin_path="$BIN_PATH" bash
+  fi
+
+  # If a bad /usr/local/bin/direnv exists, and we can sudo, replace it
+  if [ -f /usr/local/bin/direnv ] && ! file -b /usr/local/bin/direnv | grep -q 'ELF .* executable'; then
+    if sudo -n true 2>/dev/null || sudo -v >/dev/null 2>&1; then
+      echo "⚠️  Replacing broken /usr/local/bin/direnv"
+      sudo install -m 0755 "$(command -v direnv)" /usr/local/bin/direnv
+    else
+      echo "⚠️  Found broken /usr/local/bin/direnv but no sudo. Ensuring ~/.local/bin precedes it on PATH."
+      ensure_local_bin_on_path
+    fi
+  fi
+}
+
+if ! command -v direnv >/dev/null 2>&1 || is_broken_direnv; then
+  echo "🔧 Installing (or fixing) direnv via official install.sh …"
+  install_or_fix_direnv
+else
+  echo "✅ direnv already installed: $(direnv version)"
 fi
+
+echo "→ direnv at: $(command -v direnv || echo 'not found')"
+command -v direnv >/dev/null 2>&1 && direnv version || true
 
 ########################################################################
 # 2. Ensure direnv + Lmod hooks in user start-up files
 ########################################################################
 echo -e "\n── Updating shell start-up files ─────────────────────────────"
 
-DIR_HOOK='eval "$(direnv hook bash)"'
+# Define hook lines (single-line, idempotent)
+DIR_HOOK='if command -v direnv >/dev/null 2>&1; then eval "$(direnv hook bash)"; fi'
 LMOD_HOOK='. /etc/profile.d/lmod.sh'
 
+# Add to bashrc and bash_profile (login + interactive)
 add_line_if_missing "$DIR_HOOK"  "$HOME/.bashrc"
 add_line_if_missing "$LMOD_HOOK" "$HOME/.bashrc"
 add_line_if_missing "$DIR_HOOK"  "$HOME/.bash_profile"
@@ -134,6 +189,35 @@ for arg in "$@"; do
   [[ "$arg" == "--force" ]] && FORCE=true
 done
 
+# Clear stamps when --force is used
+if [[ "$FORCE" == true ]]; then
+  rm -f "$STAMP_DIR"/*.done 2>/dev/null || true
+fi
+
+
+# Figure out which user to run installers as (when invoked with sudo)
+pick_nonroot_user() {
+  if [[ $EUID -ne 0 ]]; then
+    echo "$USER"
+    return
+  fi
+  # Prefer sudo invoker
+  if [[ -n "${SUDO_USER:-}" && "${SUDO_USER}" != "root" ]]; then
+    echo "$SUDO_USER"
+    return
+  fi
+  # Fall back to repo owner
+  if stat --version >/dev/null 2>&1; then
+    owner="$(stat -c %U "$REPO_ROOT" 2>/dev/null || echo root)"
+  else
+    owner="$(stat -f %Su "$REPO_ROOT" 2>/dev/null || echo root)"
+  fi
+  echo "${owner:-root}"
+}
+
+RUN_AS_USER="$(pick_nonroot_user)"
+echo "↳ Installer scripts will run as: ${RUN_AS_USER}"
+
 shopt -s nullglob
 scripts=( "${INSTALL_DIR}/"*.sh )
 shopt -u nullglob
@@ -142,20 +226,44 @@ if ((${#scripts[@]} == 0)); then
   echo "ℹ️  No install scripts found in ${INSTALL_DIR} (nothing to do)."
 else
   for s in "${scripts[@]}"; do
-    stamp="$STAMP_DIR/$(basename "$s").done"
-    if [[ -f "$stamp" && "$FORCE" == false ]]; then
-      echo "↳ Skipping $(basename "$s") (already completed — use --force to re-run)"
+    base="$(basename "$s")"
+    stamp="$STAMP_DIR/${base}.done"
+    needs_rerun=false
+
+    # Rerun install_library.sh if library/ is missing or incomplete
+    if [[ "$base" == "install_library.sh" ]]; then
+      [[ ! -d "${REPO_ROOT}/library" ]] && needs_rerun=true
+      [[ ! -f "${REPO_ROOT}/library/grib2/lib/libjasper.a" ]] && needs_rerun=true
+      [[ ! -d "${REPO_ROOT}/library/netcdf-links" ]] && needs_rerun=true
+    fi
+
+    if [[ -f "$stamp" && "$FORCE" == false && "$needs_rerun" == false ]]; then
+      echo "↳ Skipping ${base} (already completed — use --force to re-run)"
       continue
     fi
-    echo "→ Running $(basename "$s")"
-    if bash "$s"; then
-      touch "$stamp"
-      echo "✓ Finished $(basename "$s")"
+
+    echo "→ Running ${base} as ${RUN_AS_USER}"
+
+    if [[ $EUID -eq 0 ]]; then
+      # run installers as the non-root user; preserve env and HOME
+      if sudo -H -E -u "$RUN_AS_USER" bash "$s"; then
+        touch "$stamp"
+        echo "✓ Finished ${base}"
+      else
+        echo "❌ Failed ${base} — not stamping"
+        exit 1
+      fi
     else
-      echo "❌ Failed $(basename "$s") — not stamping"
-      exit 1
+      if bash "$s"; then
+        touch "$stamp"
+        echo "✓ Finished ${base}"
+      else
+        echo "❌ Failed ${base} — not stamping"
+        exit 1
+      fi
     fi
   done
 fi
+
 
 echo "✅  Setup complete – open a new shell (login or SLURM batch) to pick up the changes."

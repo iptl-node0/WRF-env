@@ -51,6 +51,10 @@ print_diag() {
   echo "------------------"
 }
 
+# define a helper near the top (after helpers)
+mpirun_ok() { mpirun --oversubscribe --mca btl self,vader,tcp -np "$1" ./a.out &> run_tests.log.tmp; }
+
+
 # ---------- Load modules & your env module ----------
 need git; need gcc; need gfortran; need make
 if ! type module >/dev/null 2>&1; then source_lmod_safely; fi
@@ -69,7 +73,9 @@ fi
 # ---------- NetCDF env and lib symlink fixups ----------
 : "${NETCDF:?NETCDF not set by WRF/lib_1.0}"
 export PATH="${NETCDF}/bin:${PATH}"
-export LD_LIBRARY_PATH="${NETCDF}/lib:${ROOT_DIR}/library/grib2/lib:${LD_LIBRARY_PATH:-}"
+# replace current LD_LIBRARY_PATH export with:
+export LD_LIBRARY_PATH="${NETCDF}/lib:${LD_LIBRARY_PATH:-}"
+export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${ROOT_DIR}/library/grib2/lib"
 
 # Ensure versionless .so symlinks exist in netcdf-links/lib
 #if [[ -d "${NETCDF}/lib" ]]; then
@@ -106,7 +112,7 @@ grep -q "SUCCESS test 2 fortran only free format" run_tests.log.tmp || { echo "O
 
 run "Test #3: C only" gcc TEST_3_c_only.c
 run "Run #3" ./a.out
-grep -q "SUCCESS test 3 c only" run_tests.log.tmp || { echo "Output mismatch (Test #3)"; print_diag; exit 1; }
+grep -q "SUCCESS test 3 C only" run_tests.log.tmp || { echo "Output mismatch (Test #3)"; print_diag; exit 1; }
 
 run "Test #4: Fortran calls C (compile C)" gcc -c -m64 TEST_4_fortran+c_c.c
 run "Test #4: Fortran calls C (compile F)" gfortran -c -m64 TEST_4_fortran+c_f.f90
@@ -146,12 +152,14 @@ run "NetCDF+MPI #2: compile C" mpicc  -c 02_fortran+c+netcdf+mpi_c.c
 run "NetCDF+MPI #2: link" mpif90 02_fortran+c+netcdf+mpi_f.o 02_fortran+c+netcdf+mpi_c.o -L"${NETCDF}/lib" -lnetcdff -lnetcdf
 
 # Try with 2 ranks, fall back to 1 if mpirun configuration is restrictive
-if mpirun -np 2 ./a.out &> run_tests.log.tmp; then
+if mpirun_ok 2; then
   echo "==> NetCDF+MPI #2: run (2 ranks) OK"
-elif mpirun -np 1 ./a.out &> run_tests.log.tmp; then
+elif mpirun_ok 1; then
   echo "==> NetCDF+MPI #2: run (1 rank) OK"
 else
   echo "ERROR: NetCDF+MPI #2 run failed (np=2 and np=1)."
+  echo "---- mpirun output ----"
+  sed -n '1,160p' run_tests.log.tmp
   print_diag
   exit 1
 fi

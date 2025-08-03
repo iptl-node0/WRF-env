@@ -5,4 +5,5 @@
 /tests/*/kelly*
 /library
 */old/*
-
+*.tmp
+*.install_stamps

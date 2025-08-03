@@ -277,9 +277,15 @@ link_netcdf_trees() {
           break
         fi
       done
+      
       # Create/replace symlink if needed
-      if [ -n "$found_versioned" ] && [ ! -L "$libdir/lib${libbase}.so" ]; then
-        ln -sf "$(basename "$found_versioned")" "$libdir/lib${libbase}.so"
+      #if [ -n "$found_versioned" ] && [ ! -L "$libdir/lib${libbase}.so" ]; then
+      #  ln -sf "$(basename "$found_versioned")" "$libdir/lib${libbase}.so"
+      #fi
+      
+      # in link_netcdf_trees(), replace the symlink-if-not-L test with unconditional update:
+      if [ -n "$found_versioned" ]; then
+        ln -sfn "$(basename "$found_versioned")" "$libdir/lib${libbase}.so"
       fi
     fi
   done
