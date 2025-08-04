@@ -1,0 +1,23 @@
+# Config file for get_gfs.sh norads download script modified by Scott from fmidev's Mikael Hasu.
+# gfs.cnf
+
+FILE_NAME="Nordics"
+
+TOP=75
+BOTTOM=45
+LEFT=1
+RIGHT=55
+
+# Default: ("0 3 126" "132 6 240")
+# ("start step end")"
+INTERVALS=("0 3 72")
+
+# Values 0p25 0p50
+RESOLUTION=0p25
+
+# all possible boundaries
+VALID_HOURS="00|06|12|18"
+#only 00UTC boundaries are downloaded
+#VALID_HOURS="00|12"
+
+WRF_DEST="/mnt/node0-bulk1/MET"

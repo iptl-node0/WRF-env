@@ -230,31 +230,27 @@ build_hdf5_optional() {
   popd >/dev/null
 }
 
-# ---- NetCDF linking (robust: mirrors directories, links files) ----
+# ---- NetCDF linking (robust: mirrors directories, links files) -------------
 link_netcdf_trees() {
   local nc_src="$1" ncf_src="$2" target="${PREFIX}/netcdf-links"
   [[ -z "$nc_src" && -z "$ncf_src" ]] && { echo "No NetCDF sources provided; skipping link stage."; return 0; }
+
   echo "Linking NetCDF trees into: ${target}"
   mkdir -p "${target}"/{bin,include,lib}
 
-  # Mirror a subtree (bin/include/lib) and symlink files recursively.
+  # -------- mirror helper ---------------------------------------------------
   mirror_and_link() {
     local src_root="$1" subdir="$2"
-    local src="${src_root}/${subdir}"
-    local dst="${target}/${subdir}"
+    local src="${src_root}/${subdir}" dst="${target}/${subdir}"
     [[ -d "$src" ]] || return 0
 
-    # Create all directories first
-    # shellcheck disable=SC2044
-    for d in $(find "$src" -type d -print); do
-      local rel="${d#${src_root}/$subdir}"
-      mkdir -p "${dst}${rel}"
+    # 1. replicate directory tree
+    find "$src" -type d -print0 | while IFS= read -r -d '' d; do
+      mkdir -p "${dst}${d#${src}}"
     done
-    # Link all files (overwrite if exist)
-    # shellcheck disable=SC2044
-    for f in $(find "$src" -type f -print); do
-      local rel="${f#${src_root}/$subdir}"
-      ln -sfn "$f" "${dst}${rel}"
+    # 2. symlink files
+    find "$src" -type f -print0 | while IFS= read -r -d '' f; do
+      ln -sfn "$f" "${dst}${f#${src}}"
     done
   }
 
@@ -265,32 +261,22 @@ link_netcdf_trees() {
     mirror_and_link "$root" lib
   done
 
-  # Ensure versionless .so symlinks exist for linker compatibility
-  for libbase in netcdf netcdff; do
-    libdir="${target}/lib"
-    found_versioned=""
-    # Find versioned .so file (libnetcdf.so.X.Y.Z)
-    if [ -d "$libdir" ]; then
-      for f in "$libdir"/lib${libbase}.so.*; do
-        if [ -f "$f" ]; then
-          found_versioned="$f"
-          break
-        fi
-      done
-      
-      # Create/replace symlink if needed
-      #if [ -n "$found_versioned" ] && [ ! -L "$libdir/lib${libbase}.so" ]; then
-      #  ln -sf "$(basename "$found_versioned")" "$libdir/lib${libbase}.so"
-      #fi
-      
-      # in link_netcdf_trees(), replace the symlink-if-not-L test with unconditional update:
-      if [ -n "$found_versioned" ]; then
-        ln -sfn "$(basename "$found_versioned")" "$libdir/lib${libbase}.so"
-      fi
-    fi
+  # -------- fix shared‑lib symlinks -----------------------------------------
+  local libdir="${target}/lib"
+  shopt -s nullglob
+  for sofile in "$libdir"/libnetcdf*.so.*; do
+    [[ -f "$sofile" ]] || continue
+    basename=$(basename "$sofile")                # e.g. libnetcdff.so.7.1.0
+    root=${basename%%.so.*}                       # e.g. libnetcdff
+    major=$(echo "$basename" | sed -E 's/.*\.so\.([0-9]+).*/\1/')  # 7
+    # libXXX.so  (no version)
+    ln -sfn "$basename"  "${libdir}/${root}.so"
+    # libXXX.so.<MAJOR>
+    ln -sfn "$basename"  "${libdir}/${root}.so.${major}"
   done
+  shopt -u nullglob
 
-  echo "Done. Export NETCDF='${target}' to use these in builds."
+  echo "✔  NetCDF link tree complete.  Export  NETCDF='${target}'  for builds."
 }
 
 # ---------- Detect & link NetCDF (after builds) ----------

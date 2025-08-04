@@ -10,7 +10,7 @@
 set -euo pipefail
 
 # === CONFIG: set to 0 to skip WRF build for rapid WPS testing ===
-DO_WRF=0  # <-- Set to 0 to skip WRF (for WPS test cycles)
+DO_WRF=1  # <-- Set to 0 to skip WRF (for WPS test cycles)
 
 # ---------- Locate repo root ----------
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"

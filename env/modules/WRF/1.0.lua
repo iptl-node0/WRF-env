@@ -21,7 +21,7 @@ end
 if not isloaded("gnu12")    then load("gnu12/12.2.0")    end
 if not isloaded("openmpi4") then load("openmpi4/4.1.5") end
 -- HDF5 may be needed at runtime by libnetcdf; try-load only
-if not isloaded("phdf5")    then load ("phdf5/1.14.0") end
+if not isloaded("phdf5") then load("phdf5/1.14.0") end
 
 -----------------------------------------------------------------------
 -- Depend on the local deps module (NETCDF links + grib2/JasPer paths)
