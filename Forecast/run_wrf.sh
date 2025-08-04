@@ -293,7 +293,7 @@ run_wps_step geogrid   "${GEOGRID_RUN[@]}"
 
 # --------------------- 2.  link_grib + Vtable --------------------------------
 echo "Running link_grib."
-./link_grib.csh "${GFS_DATA_PATH}" || {
+./link_grib.csh "$GFS_DATA_PATH"/gfs.t${CYCLE:8:2}z.pgrb2.0p25.f* || {
     echo "link_grib failed." | tee -a log.WPS
     exit 1
 }
