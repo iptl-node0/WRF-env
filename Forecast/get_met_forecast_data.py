@@ -82,7 +82,7 @@ def cli():
     p.add_argument("--cycle", default="auto",
                    help="YYYYMMDDHH or 'auto' (snap start‑date to 6 h)")
     p.add_argument("--config-path", default=os.path.join(ddir,"gfs.cnf"))
-    p.add_argument("--download-met-gfs-script", default=os.path.join(ddir,"download_met_gfs.sh"))
+    p.add_argument("--download-met-gfs-script", default=os.path.join(ddir,"download_gfs_file.sh"))
     p.add_argument("--dry-run", action="store_true")
     return p.parse_args()
 
@@ -134,6 +134,7 @@ def main():
         RUN_DAYS=run_days,
         START_YEAR=sy, START_MONTH=f"{sm:02}", START_DAY=f"{sd:02}", START_HOUR=f"{sh:02}",
         END_YEAR=ey,   END_MONTH=f"{em:02}",   END_DAY=f"{ed:02}",   END_HOUR=f"{eh:02}",
+        INTERVAL_SEC=a.interval_hours*3600,
         FORECAST_DAYS=a.forecast_days,
         GEOG_DATA_PATH=f"\"{a.geog_data}\"",
         CASE_NAME=f"\"{a.case_name}\"",

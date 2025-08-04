@@ -131,6 +131,8 @@ RT_DATE=${CYCLE:0:8}
 RT_HOUR=${CYCLE:8:2}
 RT_DATE_HH="$CYCLE"
 RT_ISO="$(date -u -d "${RT_DATE} ${RT_HOUR}:00" +%Y-%m-%dT%H:%M:%SZ)"
+RT=$(date -u -d "${RT_DATE} ${RT_HOUR}:00" +%s)
+
 
 # ----------------- Paths / Logs ------------------------
 DEST_ROOT="$WRF_DEST"
@@ -247,9 +249,18 @@ if ! curl -s --head --fail "$probe_url" >/dev/null; then
     RT_DATE=$(date -u -d@"$RT" +%Y%m%d)
     RT_HOUR=$(date -u -d@"$RT" +%H)
     RT_DATE_HH=$(date -u -d@"$RT" +%Y%m%d%H)
+    CYCLE="$RT_DATE_HH"
     RT_ISO=$(date -u -d@"$RT" +%Y-%m-%dT%H:%M:%SZ)
     DEST_DIR="$DEST_ROOT/$AREA/$RT_DATE_HH"
     mkdir -p "$DEST_DIR"
+        
+    # Keep later steps in sync ─ overwrite (or append) CYCLE in gfs.cnf
+    if grep -q '^CYCLE=' "$CONFIG_PATH"; then
+        sed -i "s/^CYCLE=.*/CYCLE=${CYCLE}/" "$CONFIG_PATH"
+    else
+        echo "CYCLE=${CYCLE}" >> "$CONFIG_PATH"
+    fi
+    
 fi
 
 # ----------------- Parallel runner ---------------------
