@@ -6,12 +6,13 @@ whatis("Version: 1.0")
 whatis("Description: Weather Research and Forecasting (WRF) + WPS runtime env for this repo")
 
 -----------------------------------------------------------------------
--- Locate repo root from this file path: .../env/modules/WRF/1.0.lua
+-- Robustly determine repo root from modulefile path at load time
 -----------------------------------------------------------------------
-local hasMyFileName = (type(myFileName) == "function")
-local modfile  = hasMyFileName and myFileName() or pathJoin(myModulePath(), myModuleVersion() or "")
-local moddir   = pathJoin(modfile, "..")                                -- .../env/modules/WRF
-local proj_root = pathJoin(moddir, "..", "..", "..", "..")              -- -> repository root
+local modfile = myFileName and myFileName() or debug.getinfo(1, "S").source:sub(2)
+local proj_root = modfile:match("(.+)/env/modules/")
+if not proj_root then
+  LmodError("Cannot determine project root from modulefile path!")
+end
 
 -----------------------------------------------------------------------
 -- Site toolchain (compiler + MPI). Avoid loading site NetCDF to
@@ -20,12 +21,7 @@ local proj_root = pathJoin(moddir, "..", "..", "..", "..")              -- -> re
 if not isloaded("gnu12")    then load("gnu12/12.2.0")    end
 if not isloaded("openmpi4") then load("openmpi4/4.1.5") end
 -- HDF5 may be needed at runtime by libnetcdf; try-load only
-if not isloaded("phdf5") and not isloaded("hdf5") then
-  if (try_load) then
-    try_load("phdf5/1.14.0")
-    try_load("hdf5/1.14.0")
-  end
-end
+if not isloaded("phdf5")    then load ("phdf5/1.14.0") end
 
 -----------------------------------------------------------------------
 -- Depend on the local deps module (NETCDF links + grib2/JasPer paths)

@@ -94,7 +94,7 @@ bootstrap_compilers() {
     module try-load gnu12/12.2.0  || module load gnu12/12.2.0  || true
     module try-load openmpi4/4.1.5 || module load openmpi4/4.1.5 || true
     # parallel HDF5; fallback to hdf5 if phdf5 module name isn't present
-    module try-load phdf5/1.14.0 || module try-load hdf5/1.14.0 || true
+    module try-load phdf5/1.14.0 || module load phdf5/1.14.0 || true
   fi
 }
 bootstrap_compilers

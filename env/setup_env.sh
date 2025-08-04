@@ -157,11 +157,6 @@ esac
 PY_CMD=${PYTHON_VERSION:+python${PYTHON_VERSION}}
 PY_CMD=${PY_CMD:-python3}
 
-#[[ -d "$VENV_DIR" ]] || "$PY_CMD" -m venv "$VENV_DIR"
-# shellcheck source=/dev/null
-#source "$VENV_DIR/bin/activate"
-#pip install --upgrade pip "${PYTHON_PACKAGES[@]}"
-
 if [[ ! -d "$VENV_DIR" ]]; then
   if "$PY_CMD" -m venv "$VENV_DIR" 2>/dev/null; then :; else
     if command -v virtualenv &>/dev/null; then
@@ -186,16 +181,27 @@ if [[ -n "$R_VERSION" && -x "$(command -v rig)" ]]; then
   rig use "$R_VERSION"
 fi
 
+# --- 3a. Compute renv local lib path ONCE and use everywhere -----
+if command -v Rscript &>/dev/null; then
+  RENVDIR="$SCRIPT_DIR/renv"
+  R_OS=$(Rscript --vanilla -e 'cat(tolower(R.version$os))')
+  R_PLATFORM=$(Rscript --vanilla -e 'cat(R.version$platform)')
+  R_MAJOR=$(Rscript --vanilla -e 'cat(R.version$major)')
+  R_MINOR=$(Rscript --vanilla -e 'cat(strsplit(R.version$minor,"[.]")[[1]][1])')
+  export RENV_LOCAL_LIB="$RENVDIR/library/${R_OS}-${R_PLATFORM}/R-${R_MAJOR}.${R_MINOR}/${R_PLATFORM}"
+  mkdir -p "$RENV_LOCAL_LIB"
+
+  # Install renv there if missing
+  Rscript --vanilla -e 'if (!"renv" %in% installed.packages(lib.loc="'"$RENV_LOCAL_LIB"'")[, "Package"]) install.packages("renv", lib="'"$RENV_LOCAL_LIB"'", repos="https://cloud.r-project.org")'
+fi
+
 # ── 3b. Guarantee a writable R library (or offer sudo) ───────────
 if command -v Rscript &>/dev/null; then
-  # Use the same default R would pick if R_LIBS_USER is unset
   if [[ -z ${R_LIBS_USER:-} ]]; then
     R_VER=$(Rscript -e 'cat(paste0(R.version$major,".",strsplit(R.version$minor,"[.]")[[1]][1]))')
     export R_LIBS_USER="$HOME/R/$R_VER"
   fi
-
   mkdir -p "$R_LIBS_USER" 2>/dev/null || true
-
   if [[ ! -w "$R_LIBS_USER" ]]; then
     echo -e "⚠️  $R_LIBS_USER is not writable by $(whoami)."
     read -rp "    – Install the *renv* package system-wide with sudo instead? [y/N] " ans
@@ -348,12 +354,17 @@ done
 cat >> "$ENVRC_PATH" <<'EOF'
 fi
 
+# --- renv ensure paths correct -----------------------------------
+export RENV_LOCAL_LIB="$ENV_PATH/renv/library/$(Rscript --vanilla -e 'cat(tolower(R.version$os))')-$(Rscript --vanilla -e 'cat(R.version$platform)')/R-$(Rscript --vanilla -e 'cat(R.version$major)')\.$(Rscript --vanilla -e 'cat(strsplit(R.version$minor,"[.]")[[1]][1])')/$(Rscript --vanilla -e 'cat(R.version$platform)')"
+export R_LIBS_USER="$RENV_LOCAL_LIB${R_LIBS_USER:+:$R_LIBS_USER}"
+export R_LIBS="$RENV_LOCAL_LIB${R_LIBS:+:$R_LIBS}"
+
 # ─── renv auto-activation for all R sessions ─────────────────────
 # load renv from the env folder no matter where we are in the tree
 export RENV_PROJECT="$ENV_PATH"
 export R_PROFILE_USER="$ENV_PATH/.Rprofile"
 # controls debugging output from env/.Rprofile - set to FALSE for silent operation
-export RENV_RPROFILE_VERBOSE=FALSE
+export RENV_RPROFILE_VERBOSE=FALSE # Set to true for debugging only
 
 
 # ─── renv restore on first run ────────────────────────────────────

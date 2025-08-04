@@ -7,3 +7,9 @@
 */old/*
 *.tmp
 *.install_stamps
+env/.venv
+env/renv
+env/.Rprofile
+env/renv.lock
+env/config_template.txt
+.envrc
