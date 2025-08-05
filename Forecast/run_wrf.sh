@@ -10,7 +10,7 @@
 # 		    https://nomads.ncep.noaa.gov/
 
 ###############################################################################
-##  Configuration loader – pulls values from gns.cnf --------------------------
+##  Configuration loader – pulls values from gns.cnf ----------------------  ##
 ##  Order of precedence for each var:                                        ##
 ##    1) already exported in the environment                                 ##
 ##    2) value read from gfs.cnf (bash syntax)                               ##
@@ -23,7 +23,6 @@ initial_dir=$(pwd)
 start_time=$(date +%s)
 
 ulimit -s unlimited                     # large stack for big domains
-export OMP_NUM_THREADS=$(( $(nproc) > 1 ? $(nproc) - 1 : 1 ))
 
 #--- load module --------------------------------------------------------------
 
@@ -92,6 +91,26 @@ fi
 : "${CENTER_LON:=0}"
 : "${RADIUS_KM:=900}"              # default half‑side of 900 km (= 1800 km square)
 DOMAIN_SIZE=$(printf "%.0f" "$(bc -l <<< "2 * ${RADIUS_KM}")")   # km
+
+# --- trim 1 input interval from END_DATE for WPS / WRF -----------------------
+#  ↳ The downloader will still fetch the full range (including the last file),
+#    but WPS/WRF will stop one step earlier to prevent ungrib/metgrid errors. 
+#
+
+# 1. Epoch maths
+END_EPOCH=$(date -u -d "${END_DATE//_/ }" +%s)
+END_TRIM_EPOCH=$(( END_EPOCH - INTERVAL_SEC ))          # minus one timestep
+
+# 2. Re‑assemble the truncated date strings/fields
+END_DATE_TRIM=$(date -u -d "@${END_TRIM_EPOCH}" +%Y-%m-%d_%H:%M:%S)
+END_YEAR=$(date -u -d "@${END_TRIM_EPOCH}" +%Y)
+END_MONTH=$(date -u -d "@${END_TRIM_EPOCH}" +%m)
+END_DAY=$(date -u -d "@${END_TRIM_EPOCH}" +%d)
+END_HOUR=$(date -u -d "@${END_TRIM_EPOCH}" +%H)
+
+# 3. Export *only* the trimmed variants for downstream namelist generation
+export END_DATE="$END_DATE_TRIM" \
+       END_YEAR END_MONTH END_DAY END_HOUR
 
 # interval seconds
 INTERVAL=$INTERVAL_SEC
@@ -260,7 +279,7 @@ done
 GEOGRID_RUN=( ./geogrid.exe )
 
 # ungrib is always serial (see 3); metgrid can be mpi
-METGRID_RUN=(mpirun -np "${OMP_NUM_THREADS}" ./metgrid.exe )
+METGRID_RUN=(mpirun ./metgrid.exe )
 
 # --- helper to execute a step, keep log, honour -e ---------------------------
 run_wps_step() {
@@ -444,11 +463,11 @@ cat > namelist.input <<EOF
 EOF
 
 # 5. Run real.exe
-mpirun -np "${OMP_NUM_THREADS}" "${RUN_DIR}/real.exe"  > log.real 2>&1 \
+mpirun "${RUN_DIR}/real.exe"  > log.real 2>&1 \
     || { echo "real.exe failed – see ${RUN_DIR}/log.real" >&2; exit 1; }
 
 # 7. Run wrf.exe
-mpirun -np "${OMP_NUM_THREADS}" "${RUN_DIR}/wrf.exe"   > log.wrfexe 2>&1 \
+mpirun "${RUN_DIR}/wrf.exe"   > log.wrfexe 2>&1 \
     || { echo "wrf.exe failed – see ${RUN_DIR}/log.wrfexe" >&2; exit 1; }
 
 # 8. Collect outputs
