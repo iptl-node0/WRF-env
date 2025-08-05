@@ -10,7 +10,7 @@ APT_PACKAGES=(direnv python3 python3-venv lmod r-base r-base-dev)
 PACMAN_PACKAGES=(untested)                                   # untested means not supported by repository developer - use at your own risk
 
 # ── Python packages (pip) ─────────────────────────────────────────
-PYTHON_PACKAGES=(numpy)
+PYTHON_PACKAGES=(numpy geographiclib)
 
 # ── Optional: R packages to pre-seed into renv cache ─────────────
 R_PACKAGES=()

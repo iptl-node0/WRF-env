@@ -101,6 +101,20 @@ fi
 command -v seq >/dev/null 2>&1 || { echo "ERROR: 'seq' not found"; exit 2; }
 command -v curl >/dev/null 2>&1 || { echo "ERROR: 'curl' not found"; exit 2; }
 
+# ----- Pad edges to ensure full domain coverage for WRF -----------------------
+# ----- padding the lat‑lon box by minimum of one degree in all directions -----
+# pad by 10 % of span (or at least 2°)
+dlat=$(awk "BEGIN {print (${TOP}-${BOTTOM})*0.10 }")
+dlon=$(awk "BEGIN {print (${RIGHT}-${LEFT})*0.10 }")
+(( $(echo "$dlat < 1.0" | bc -l) )) && dlat=1
+(( $(echo "$dlon < 1.0" | bc -l) )) && dlon=1
+
+PAD_TOP=$(awk "BEGIN {print (${TOP}+dlat>90)?90:${TOP}+dlat}")
+PAD_BOTTOM=$(awk "BEGIN {print (${BOTTOM}-dlat<-90)?-90:${BOTTOM}-dlat}")
+PAD_LEFT=$(awk "BEGIN {print (${LEFT}-dlon<0)?0:${LEFT}-dlon}")
+PAD_RIGHT=$(awk "BEGIN {print (${RIGHT}+dlon>360)?360:${RIGHT}+dlon}")
+
+
 # ----------------- Helpers ----------------------------
 hr_size() { # bytes -> human readable (B/KB/MB/GB/TB), base 1024
   local b=$1 u=(B KB MB GB TB) i=0
@@ -147,9 +161,12 @@ if [[ ! -s "$CSV_LOG" ]]; then
 fi
 
 # ----------------- URL builder -------------------------
+# Global dataset left in for now to avoid unexplained errors in WPS
 buildURL() {
   local file="$1"
-  echo "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_${RESOLUTION}.pl?file=${file}&lev_1_mb=on&lev_2_mb=on&lev_3_mb=on&lev_5_mb=on&lev_7_mb=on&lev_10_mb=on&lev_15_mb=on&lev_20_mb=on&lev_30_mb=on&lev_40_mb=on&lev_50_mb=on&lev_70_mb=on&lev_100_mb=on&lev_150_mb=on&lev_200_mb=on&lev_250_mb=on&lev_300_mb=on&lev_350_mb=on&lev_400_mb=on&lev_450_mb=on&lev_500_mb=on&lev_550_mb=on&lev_600_mb=on&lev_650_mb=on&lev_700_mb=on&lev_750_mb=on&lev_800_mb=on&lev_850_mb=on&lev_900_mb=on&lev_925_mb=on&lev_950_mb=on&lev_975_mb=on&lev_1000_mb=on&lev_surface=on&lev_2_m_above_ground=on&lev_10_m_above_ground=on&lev_mean_sea_level=on&lev_entire_atmosphere=on&lev_entire_atmosphere_%5C%28considered_as_a_single_layer%5C%29=on&lev_low_cloud_layer=on&lev_middle_cloud_layer=on&lev_high_cloud_layer=on&lev_convective_cloud_layer=on&lev_0-0.1_m_below_ground=on&lev_0.1-0.4_m_below_ground=on&lev_0.4-1_m_below_ground=on&lev_1-2_m_below_ground=on&lev_1000_mb=on&lev_tropopause=on&lev_max_wind=on&lev_80_m_above_ground=on&var_CAPE=on&var_CIN=on&var_GUST=on&var_HGT=on&var_ICEC=on&var_LAND=on&var_PEVPR=on&var_PRATE=on&var_PRES=on&var_PRMSL=on&var_PWAT=on&var_RH=on&var_SHTFL=on&var_SNOD=on&var_SOILW=on&var_TSOIL=on&var_MSLET=on&var_SPFH=on&var_TCDC=on&var_TMP=on&var_DPT=on&var_UGRD=on&var_VGRD=on&var_DZDT=on&var_CNWAT=on&var_WEASD=on&subregion=on&leftlon=${LEFT}&rightlon=${RIGHT}&toplat=${TOP}&bottomlat=${BOTTOM}&dir=%2Fgfs.${RT_DATE}%2F${RT_HOUR}%2Fatmos"
+#  echo "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_${RESOLUTION}.pl?file=${file}&lev_1_mb=on&lev_2_mb=on&lev_3_mb=on&lev_5_mb=on&lev_7_mb=on&lev_10_mb=on&lev_15_mb=on&lev_20_mb=on&lev_30_mb=on&lev_40_mb=on&lev_50_mb=on&lev_70_mb=on&lev_100_mb=on&lev_150_mb=on&lev_200_mb=on&lev_250_mb=on&lev_300_mb=on&lev_350_mb=on&lev_400_mb=on&lev_450_mb=on&lev_500_mb=on&lev_550_mb=on&lev_600_mb=on&lev_650_mb=on&lev_700_mb=on&lev_750_mb=on&lev_800_mb=on&lev_850_mb=on&lev_900_mb=on&lev_925_mb=on&lev_950_mb=on&lev_975_mb=on&lev_1000_mb=on&lev_surface=on&lev_2_m_above_ground=on&lev_10_m_above_ground=on&lev_mean_sea_level=on&lev_entire_atmosphere=on&lev_entire_atmosphere_%5C%28considered_as_a_single_layer%5C%29=on&lev_low_cloud_layer=on&lev_middle_cloud_layer=on&lev_high_cloud_layer=on&lev_convective_cloud_layer=on&lev_0-0.1_m_below_ground=on&lev_0.1-0.4_m_below_ground=on&lev_0.4-1_m_below_ground=on&lev_1-2_m_below_ground=on&lev_1000_mb=on&lev_tropopause=on&lev_max_wind=on&lev_80_m_above_ground=on&var_CAPE=on&var_CIN=on&var_GUST=on&var_HGT=on&var_ICEC=on&var_LAND=on&var_PEVPR=on&var_PRATE=on&var_PRES=on&var_PRMSL=on&var_PWAT=on&var_RH=on&var_SHTFL=on&var_SNOD=on&var_SOILW=on&var_TSOIL=on&var_MSLET=on&var_SPFH=on&var_TCDC=on&var_TMP=on&var_DPT=on&var_UGRD=on&var_VGRD=on&var_DZDT=on&var_CNWAT=on&var_WEASD=on&subregion=on&leftlon=${PAD_LEFT}&rightlon=${PAD_RIGHT}&toplat=${PAD_TOP}&bottomlat=${PAD_BOTTOM}&dir=%2Fgfs.${RT_DATE}%2F${RT_HOUR}%2Fatmos"
+  # replaced with global dataset for debugging
+  echo "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_${RESOLUTION}.pl?file=${file}&lev_1_mb=on&lev_2_mb=on&lev_3_mb=on&lev_5_mb=on&lev_7_mb=on&lev_10_mb=on&lev_15_mb=on&lev_20_mb=on&lev_30_mb=on&lev_40_mb=on&lev_50_mb=on&lev_70_mb=on&lev_100_mb=on&lev_150_mb=on&lev_200_mb=on&lev_250_mb=on&lev_300_mb=on&lev_350_mb=on&lev_400_mb=on&lev_450_mb=on&lev_500_mb=on&lev_550_mb=on&lev_600_mb=on&lev_650_mb=on&lev_700_mb=on&lev_750_mb=on&lev_800_mb=on&lev_850_mb=on&lev_900_mb=on&lev_925_mb=on&lev_950_mb=on&lev_975_mb=on&lev_1000_mb=on&lev_surface=on&lev_2_m_above_ground=on&lev_10_m_above_ground=on&lev_mean_sea_level=on&lev_entire_atmosphere=on&lev_entire_atmosphere_%5C%28considered_as_a_single_layer%5C%29=on&lev_low_cloud_layer=on&lev_middle_cloud_layer=on&lev_high_cloud_layer=on&lev_convective_cloud_layer=on&lev_0-0.1_m_below_ground=on&lev_0.1-0.4_m_below_ground=on&lev_0.4-1_m_below_ground=on&lev_1-2_m_below_ground=on&lev_tropopause=on&lev_max_wind=on&lev_80_m_above_ground=on&var_CAPE=on&var_CIN=on&var_GUST=on&var_HGT=on&var_ICEC=on&var_LAND=on&var_PEVPR=on&var_PRATE=on&var_PRES=on&var_PRMSL=on&var_PWAT=on&var_RH=on&var_SHTFL=on&var_SNOD=on&var_SOILW=on&var_TSOIL=on&var_MSLET=on&var_SPFH=on&var_TCDC=on&var_TMP=on&var_DPT=on&var_UGRD=on&var_VGRD=on&var_DZDT=on&var_CNWAT=on&var_WEASD=on&dir=%2Fgfs.${RT_DATE}%2F${RT_HOUR}%2Fatmos"
 }
 
 # ----------------- Validation --------------------------
@@ -240,6 +257,7 @@ downloadStep() {
 }
 
 # ----- probe that the reference cycle exists on NOMADS -----------------
+
 first_file="gfs.t${RT_HOUR}z.pgrb2.${RESOLUTION}.f000"
 probe_url=$(buildURL "$first_file")
 
@@ -260,8 +278,114 @@ if ! curl -s --head --fail "$probe_url" >/dev/null; then
     else
         echo "CYCLE=${CYCLE}" >> "$CONFIG_PATH"
     fi
-    
+
 fi
+
+##############################################################################
+# ✦ Re‑sync START_DATE / END_DATE / INTERVALS in gfs.cnf to the new CYCLE
+##############################################################################
+# helper: write (or replace) a single KEY=value line in the cnf
+set_cfg() {               # key  value
+    if grep -q "^$1=" "$CONFIG_PATH"; then
+        sed -i "s|^$1=.*|$1=$2|" "$CONFIG_PATH"
+    else
+        echo "$1=$2" >> "$CONFIG_PATH"
+    fi
+}
+
+# Assume new cycle is in CYCLE, RT, etc. after the rollback!
+max_fhr=240      # for GFS 0p25, max forecast hour (change if you want less)
+
+# If this is the first download after fallback, start at 0h (cycle time).
+snap_offset=0
+start_epoch=$RT   # RT = epoch of new CYCLE start
+end_epoch=$(( RT + max_fhr * 3600 ))  # always snap to the max available
+
+new_START_DATE=$(date -u -d "@$start_epoch" +%Y-%m-%d_%H:%M:%S)
+new_END_DATE=$(date -u -d "@$end_epoch" +%Y-%m-%d_%H:%M:%S)
+
+set_cfg START_DATE "$new_START_DATE"
+set_cfg END_DATE   "$new_END_DATE"
+
+set_cfg START_YEAR $(date -u -d "@$start_epoch" +%Y)
+set_cfg START_MONTH $(date -u -d "@$start_epoch" +%m)
+set_cfg START_DAY   $(date -u -d "@$start_epoch" +%d)
+set_cfg START_HOUR  $(date -u -d "@$start_epoch" +%H)
+
+set_cfg END_YEAR $(date -u -d "@$end_epoch" +%Y)
+set_cfg END_MONTH $(date -u -d "@$end_epoch" +%m)
+set_cfg END_DAY   $(date -u -d "@$end_epoch" +%d)
+set_cfg END_HOUR  $(date -u -d "@$end_epoch" +%H)
+
+run_days=$(( (end_epoch - start_epoch) / 86400 ))
+set_cfg RUN_DAYS "$run_days"
+
+set_cfg INTERVALS "(\"0 3 $max_fhr\")"
+
+
+
+##############################################################################
+# ✦ 0. fast‑fail on directory problems
+##############################################################################
+#for d in "$WRF_DEST" "$DEST_ROOT" "$LOG_DIR"; do
+#    [[ -d $d && -w $d ]] || {
+#        echo "ERROR: directory $d missing or not writable" >&2
+#        exit 2
+#    }
+#done
+#mkdir -p   "$DEST_DIR"   # still create the leaf if the tree is good
+
+##############################################################################
+# ✦ 1. build the full list of URLs we need for this cycle
+##############################################################################
+#build_needed_urls() {
+#    local urls=()
+#    for interval in "${INTERVALS[@]}"; do
+#        read -r istart istep iend <<<"$interval"
+#        for fhr in $(seq "$istart" "$istep" "$iend"); do
+#            urls+=( "$(buildURL "gfs.t${RT_HOUR}z.pgrb2.${RESOLUTION}.f$(printf '%03d' "$fhr")")" )
+#        done
+#    done
+#    printf '%s\n' "${urls[@]}"
+#}
+
+##############################################################################
+# ✦ 2. probe ALL the URLs; retry by cycling backwards until complete
+##############################################################################
+#max_back=4           # try current + 4 earlier cycles (24 h)
+#while (( max_back-- >= 0 )); do
+#    missing=0
+#    while read -r u; do
+#        curl -s --head --fail "$u" >/dev/null || (( missing++ ))
+#    done < <(build_needed_urls)
+#
+#    if (( missing == 0 )); then
+#        echo "All files present for cycle $RT_DATE_HH – proceeding."
+#        break
+#    fi
+
+#    echo "Cycle $RT_DATE_HH incomplete ($missing files missing) – try previous cycle."
+#    # go back 6 h
+#    RT=$(( RT - 21600 ))
+#    RT_DATE=$(date -u -d@"$RT" +%Y%m%d)
+#    RT_HOUR=$(date -u -d@"$RT" +%H)
+#    RT_DATE_HH=${RT_DATE}${RT_HOUR}
+#    CYCLE=$RT_DATE_HH
+#    DEST_DIR="$DEST_ROOT/$AREA/$RT_DATE_HH"
+#    mkdir -p "$DEST_DIR"
+#    # write the new cycle back to gfs.cnf so WPS/WRF stay consistent
+#    if grep -q '^CYCLE=' "$CONFIG_PATH"; then
+#        sed -i "s/^CYCLE=.*/CYCLE=${CYCLE}/" "$CONFIG_PATH"
+#    else
+#        echo "CYCLE=${CYCLE}" >> "$CONFIG_PATH"
+#    fi
+#done
+
+#if (( missing > 0 )); then
+#    echo "ERROR: Even the oldest probed cycle is incomplete – abort." >&2
+#    exit 3
+#fi
+
 
 # ----------------- Parallel runner ---------------------
 dnum=0
